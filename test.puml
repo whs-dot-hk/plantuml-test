@@ -1,0 +1,82 @@
+@startuml
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v13.1/dist
+
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/ApplicationIntegration/SimpleNotificationService.puml
+!include AWSPuml/Compute/EC2AMI.puml
+!include AWSPuml/Compute/EC2ImageBuilder.puml
+!include AWSPuml/Compute/EC2M5Instance.puml
+!include AWSPuml/Compute/Lambda.puml
+!include AWSPuml/Groups/all.puml
+!include AWSPuml/ManagementGovernance/CloudTrail.puml
+!include AWSPuml/ManagementGovernance/CloudWatch.puml
+!include AWSPuml/SecurityIdentityCompliance/IdentityAccessManagementRole.puml
+!include AWSPuml/Storage/SimpleStorageService.puml
+!include AWSPuml/Storage/SimpleStorageServiceBucket.puml
+
+'hide stereotype
+skinparam linetype ortho
+skinparam rectangle {
+    BackgroundColor AWS_BG_COLOR
+    BorderColor transparent
+}
+
+AWSGroupColoring(S3BucketGroup, #FFFFFF, AWS_COLOR_GREEN, plain)
+!define S3BucketGroup(g_alias, g_label="Amazon S3 Bucket") AWSGroupEntity(g_alias, g_label, AWS_COLOR_GREEN, SimpleStorageService, S3BucketGroup)
+
+AWSGroupColoring(EC2ImageBuilderGroup, #FFFFFF, AWS_COLOR_ORANGE, plain)
+!define EC2ImageBuilderGroup(g_alias, g_label="EC2 Image Builder") AWSGroupEntity(g_alias, g_label, AWS_COLOR_ORANGE, EC2ImageBuilder, EC2ImageBuilderGroup)
+
+!procedure $stepnum($number) 
+<back:black><color:white><b> $number </b></color></back>
+!endprocedure
+
+AWSCloudAltGroup(account, H+ EC2 Image Builder Account){
+  RegionGroup(region) {
+    EC2ImageBuilderGroup(ec2imagebuilder) {
+      rectangle "$EC2AMIIMG()\nLatest AL2" as amiin
+      rectangle "$EC2M5InstanceIMG()\nInstance*\n(Run\nAnsible)" as instance
+      rectangle "$EC2AMIIMG()\n**New**\nMagento\nAMI" as amiout
+      
+      amiin -> instance: $stepnum(1)\linput
+      instance -> amiout: $stepnum(2)\loutput
+    }
+
+    PrivateSubnetGroup(private) {
+      rectangle "$EC2M5InstanceIMG()\n *In Private\nSubnet" as instancecopy #Transparent
+      rectangle "$LambdaIMG()\nLambda" as lambda #Transparent
+    }
+    S3BucketGroup(buckets) {
+      rectangle "$SimpleStorageServiceBucketIMG()\nLogs\nBucket" as b1
+      rectangle "$SimpleStorageServiceBucketIMG()\nLogs\nBucket" as b2
+    }
+    
+
+    CloudTrail(cloudtrail,,)
+    CloudWatch(cloudwatch,,)
+    SimpleNotificationService(sns,,)
+      
+    cloudtrail -> cloudwatch: $stepnum(3)
+    cloudwatch -> sns: $stepnum(4)
+    
+    sns -u-> lambda: $stepnum(5)
+    
+    instance -d-> b1
+    cloudtrail -u-> b2
+    
+    rectangle "$IdentityAccessManagementRoleIMG()\nInstance-\nProfile" as r1
+    rectangle "$IdentityAccessManagementRoleIMG()\nLambda\nRole" as r2
+    rectangle "$IdentityAccessManagementRoleIMG()\nCloudTrail\nRole" as r3
+    
+    r1 -d-> instance
+    r2 -d-> lambda
+    r3 -u-> cloudtrail
+    
+    instance <..> instancecopy
+  }
+}
+
+rectangle "<img:https://www.jenkins.io/images/logos/jenkins/jenkins.png{scale=0.1}>\nH+ Jenkins" as jenkins
+
+lambda -r-> jenkins: $stepnum(6)
+@enduml
